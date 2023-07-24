@@ -12,7 +12,7 @@ Pod::Spec.new do |s|
   s.author             = { "author" => "contact@mvpstars.com" }
   s.platform     = :ios, "7.0"
   s.source       = { :git => "https://github.com/mvpstars/react-native-merge-images", :tag => "master" }
-  s.source_files  = "RNMergeImages/**/*.{h,m}"
+  s.source_files  = "ios/*.{h,m}"
   s.requires_arc = true
 
 
@@ -20,5 +20,3 @@ Pod::Spec.new do |s|
   #s.dependency "others"
 
 end
-
-  
