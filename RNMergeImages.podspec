@@ -6,6 +6,7 @@ Pod::Spec.new do |s|
   s.description  = <<-DESC
                   RNMergeImages
                    DESC
+  s.homepage     = "https://github.com/mvpstars/react-native-merge-images"
   s.homepage     = ""
   s.license      = "MIT"
   # s.license      = { :type => "MIT", :file => "FILE_LICENSE" }
