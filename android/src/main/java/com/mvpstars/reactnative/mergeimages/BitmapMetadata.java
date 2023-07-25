@@ -2,7 +2,7 @@ package com.mvpstars.reactnative.mergeimages;
 
 import android.graphics.BitmapFactory;
 import android.graphics.Matrix;
-import android.support.media.ExifInterface;
+import androidx.exifinterface.media.ExifInterface;
 
 import java.io.IOException;
 
