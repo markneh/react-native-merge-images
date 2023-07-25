@@ -4,6 +4,7 @@ import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.graphics.Canvas;
 import android.graphics.Matrix;
+import android.graphics.Rect;
 import android.graphics.RectF;
 import android.net.Uri;
 import android.os.AsyncTask;
@@ -40,6 +41,7 @@ public class RNMergeImagesModule extends ReactContextBaseJavaModule {
   public static final int RN_MERGE_TARGET_DISK = 2;
 
   public static final int DEFAULT_JPEG_QUALITY = 80;
+  public static final double DEFAULT_PHOTO_HEIGHT = 2000;
 
   private final ReactApplicationContext reactContext;
 
@@ -100,53 +102,90 @@ public class RNMergeImagesModule extends ReactContextBaseJavaModule {
 
     @Override
     protected Void doInBackground(Void... voids) {
-      final int size = options.hasKey("size") ? options.getInt("size") : RN_MERGE_SIZE_SMALLEST;
-      final int target = options.hasKey("target") ? options.getInt("target") : RN_MERGE_TARGET_TEMP;
-      final int jpegQuality = options.hasKey("jpegQuality") ? options.getInt("jpegQuality") : DEFAULT_JPEG_QUALITY;
+      try {
+        final int maxWidth = options.hasKey("maxWidth") ? options.getInt("maxWidth") : 0;
+        final int target = options.hasKey("target") ? options.getInt("target") : RN_MERGE_TARGET_TEMP;
+        final int jpegQuality = options.hasKey("jpegQuality") ? options.getInt("jpegQuality") : DEFAULT_JPEG_QUALITY;
 
-      final ArrayList<BitmapMetadata> bitmaps = new ArrayList<>(images.size());
-      int targetWidth, targetHeight;
+        final ArrayList<BitmapMetadata> bitmaps = new ArrayList<>(images.size());
+        int targetWidth = 0;
+        int targetHeight = 0;
 
-      switch (size) {
-        case RN_MERGE_SIZE_SMALLEST:
-          targetWidth = Integer.MAX_VALUE;
-          targetHeight = Integer.MAX_VALUE;
-          break;
-        default:
-          targetWidth = 0;
-          targetHeight = 0;
-      }
+        if (images.size() == 0) {
+          throw new Exception("Provided arrays of image paths is empty");
+        }
 
-      for (int i = 0, n = images.size(); i < n; i++) {
-        BitmapMetadata bitmapMetadata = BitmapMetadata.load(getFilePath(images.getString(i)));
-        if (bitmapMetadata != null) {
-          bitmaps.add(bitmapMetadata);
-          if (size == RN_MERGE_SIZE_LARGEST && (bitmapMetadata.width > targetWidth || bitmapMetadata.height > targetHeight)) {
-            targetWidth = bitmapMetadata.width;
-            targetHeight = bitmapMetadata.height;
-          } else if (size == RN_MERGE_SIZE_SMALLEST && (bitmapMetadata.width < targetWidth || bitmapMetadata.height < targetHeight)) {
-            targetWidth = bitmapMetadata.width;
-            targetHeight = bitmapMetadata.height;
+        for (int i = 0, n = images.size(); i < n; i++) {
+          String path = images.getString(i);
+          BitmapMetadata bitmapMetadata = BitmapMetadata.load(getFilePath(path));
+          if (bitmapMetadata != null) {
+            bitmaps.add(bitmapMetadata);
+
+            Size originalSize = new Size(bitmapMetadata.width, bitmapMetadata.height);
+            Size clampedSize = clampedImageSize(originalSize, maxWidth);
+
+            targetHeight += clampedSize.height;
+            if (targetWidth < clampedSize.width) {
+              targetWidth = clampedSize.width;
+            }
           }
         }
-      }
 
-      final Bitmap mergedBitmap = Bitmap.createBitmap(targetWidth, targetHeight, Bitmap.Config.ARGB_8888);
-      final Canvas canvas = new Canvas(mergedBitmap);
+        final Bitmap mergedBitmap = Bitmap.createBitmap(targetWidth, targetHeight, Bitmap.Config.ARGB_8888);
+        final Canvas canvas = new Canvas(mergedBitmap);
 
-      for (BitmapMetadata bitmapMetadata: bitmaps) {
-        Bitmap bitmap = BitmapFactory.decodeFile(bitmapMetadata.fileName);
-        Matrix matrix = bitmapMetadata.getMatrix(targetWidth, targetHeight);
-        if (matrix == null) {
-          canvas.drawBitmap(bitmap, null, new RectF(0, 0, targetWidth, targetHeight), null);
-        } else {
-          canvas.drawBitmap(bitmap, matrix, null);
+        float y = 0;
+
+        for (BitmapMetadata bitmapMetadata : bitmaps) {
+          Bitmap bitmap = BitmapFactory.decodeFile(bitmapMetadata.fileName);
+
+          Size originalSize = new Size(bitmapMetadata.width, bitmapMetadata.height);
+          Size clampedSize = clampedImageSize(originalSize, maxWidth);
+
+          canvas.drawBitmap(bitmap, null, new RectF(0, y, clampedSize.width, clampedSize.height + y), null);
+          y += clampedSize.height;
+
+          bitmap.recycle();
         }
-        bitmap.recycle();
-      }
 
-      saveBitmap(mergedBitmap, target, jpegQuality, promise);
+        saveBitmap(mergedBitmap, target, jpegQuality, promise);
+      } catch (Exception e) {
+        promise.reject("Failed to merge images", e);
+      }
       return null;
+    }
+  }
+
+  private Size clampedImageSize(Size size, int maxWidth) {
+    if (maxWidth <= 0) {
+      return size;
+    }
+
+    float aspectRatio = (float)size.width / (float)size.height;
+    int width = Math.min(size.width, maxWidth);
+    int height = (int)((float)width / aspectRatio);
+
+    Size clampedSize = new Size(width, height);
+    return clampedSize;
+  }
+
+  private class Size {
+    public final int width;
+    public final int height;
+
+    public Size(int width, int height) {
+      this.width = width;
+      this.height = height;
+    }
+  }
+
+  private class MergeImagesValidationException extends RuntimeException {
+    public final String message;
+
+    public MergeImagesValidationException(String message, Throwable cause) {
+      super(message, cause);
+
+      this.message = message;
     }
   }
 
